@@ -12,3 +12,19 @@ Cargo.lock
 
 # MSVC Windows builds of rustc generate these, which store debugging information
 *.pdb
+
+# Rust
+target/
+
+# Node.js
+node_modules/
+backend/.env
+# Environment variables
+.env
+
+# Compiled files
+/build
+
+# Dependency lock files
+yarn.lock
+package-lock.json
