@@ -2,10 +2,11 @@
 use std::env;
 
 use axum::{extract::State, http::HeaderName, routing::get, Json, Router};
-use models::{ApiResponse, BitcoinData, AppState};
-use reqwest::Method;
+use chrono::{DateTime,Utc};
+use models::{ApiResponse, BitcoinData, AppState, Block, Transaction};
+use reqwest::{header::{ HeaderMap, HeaderValue}, Client, ClientBuilder, Method};
 // use reqwest::Error;
-use serde::Deserialize;
+use serde::{de::value, Deserialize};
 use serde_json::{json, Value};
 use tokio::{self, task, time::{self, sleep, Duration}};
 use sqlx::{postgres::PgPoolOptions, PgPool, Pool, Postgres, Row};
@@ -24,10 +25,14 @@ mod models;
 async fn main() {
     dotenv().expect("-->> No .env found \n");
     let pool = connect_n_get_db_pool().await.unwrap();
+
+
     // start_fetching_bitcoin_data(&pool).await;
     let shared_state = AppState {
         pg_pool:  pool
     };
+
+
     let cors = CorsLayer::new()
         .allow_methods([Method::GET, Method::POST])
         .allow_origin(Any)
@@ -41,8 +46,14 @@ async fn main() {
 
     // run our app with hyper, listening globally on port 3000
     println!("Server started!!!");
+    let latest_bitcoin_data = fetch_btc_data().await.unwrap();
+
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+
+    
     axum::serve(listener, app).await.unwrap();
+
+    
 }
 
 
@@ -126,6 +137,99 @@ async fn connect_n_get_db_pool() -> Result<Pool<Postgres>, sqlx::Error> {
 }
 
 async fn fetch_btc_data() ->  anyhow::Result<BitcoinData> {
+    let client = ClientBuilder::new()
+        .build()
+        .expect("Failed to create reqwest client");
+    let mut headers = HeaderMap::new();
+
+    let params = [
+        ("date", Utc::now().to_rfc3339()),
+        ("chain", String::from("0x1")), 
+    ];
+
+    let api_key = env::var("MORALIS_API_KEY").expect("Key must set");
+    let api_key_header_value  = HeaderValue::from_str(&api_key)
+        .expect("Failed to create Header value from API key");
+    headers.insert("X-API-Key", HeaderValue::from_str(&api_key).expect("Invalid API key"));
+
+    let current_time = Utc::now().to_rfc3339();
+    let current_time_header_value = HeaderValue::from_str(&current_time)
+        .expect("Failed to create HeaderValue from current time string");
+    headers.insert("Date", HeaderValue::from_str(&current_time).expect("Failed to crate HeaderValue from current time"));
+    let latest_block_resp = client.get("https://deep-index.moralis.io/api/v2/dateToBlock")
+        .query(&params)
+        .headers(headers.clone())
+        .send()
+        .await?
+        .json::<Value>()
+        .await?;
+        
+
+    let latest_block = latest_block_resp["block"].as_i64().unwrap();
+    let mut block_nr_or_parent_hash = latest_block.to_string();
+
+    for i in 0..1{
+        let block_resp = match client.get(&format!("https://deep-index.moralis.io/api/v2/block/{}", block_nr_or_parent_hash))
+            .query(&params)
+            .headers(headers.clone())
+            .send()
+            .await {
+                Ok(response) => response,
+                Err(e) => {
+                    println!("Error fetching block data: {}", e);
+                    break; // Exit loop or handle error as needed
+                }
+            };
+
+            let block_resp_json = block_resp.json::<Value>().await?;
+            
+            if let Some(error_msg) = block_resp_json.get("message").and_then(Value::as_str) {
+                if error_msg == "No block found" {
+                    println!("No block found for block number/hash: {}", block_nr_or_parent_hash);
+                    break; // Exit loop or handle as needed
+                }
+            }
+
+            
+
+            block_nr_or_parent_hash = block_resp_json["parent_hash"].as_str().ok_or("No parent hash found")?.to_string();
+
+
+
+        
+
+
+        // let block_metrics = Block{
+        //     blockchain: "Etherum".to_string(),
+        //     block_number :block_resp["number"].as_i64().unwrap(),
+        //     total_transaction: block_resp["transaction_count"].as_i64().unwrap(),
+        //     gas_used: block_resp["gas_used"].as_str().unwrap().to_string(),
+        //     miner: block_resp["miner"].as_str().unwrap().to_string(),
+        //     time: DateTime::parse_from_rfc3339(block_resp["timestamp"].as_str().unwrap()).unwrap().with_timezone(&Utc),
+        //     difficulty: block_resp["difficulty"].as_str().unwrap().to_string(),
+        //     hashrate: block_resp["hashrate"].as_str().unwrap().to_string(),
+        //     transactions: if i == 0 {
+        //         Some(block_resp["transactions"].as_array().unwrap().iter().map(|tx|{
+        //             Transaction{
+        //                 transaction_hash: tx["hash"].as_str().unwrap().to_string(),
+        //                 time: DateTime::parse_from_rfc3339(tx["block_timestamp"].as_str().unwrap()).unwrap().with_timezone(&Utc),
+        //                 from_address: tx["from_address"].as_str().unwrap().to_string(),
+        //                 to_address: tx["to_address"].as_str().unwrap().to_string(),
+        //                 value: tx["value"].as_str().unwrap().to_string(),
+        //                 gas_used: tx["gas_used"].as_str().unwrap().to_string(),
+        //                 gas_price: tx["gas_price"].as_str().unwrap().to_string(),
+        //             }
+        //         }).collect())
+        //     } else {
+        //         None
+        //     },
+
+        // };
+        
+
+
+    }
+
     let url = "https://api.blockcypher.com/v1/btc/main";
     let resp = reqwest::get(url).await?;
     let data: ApiResponse = resp.json().await?;
