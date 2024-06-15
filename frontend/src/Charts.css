@@ -1,0 +1,13 @@
+/* src/Charts.css */
+.chart-container {
+    background-color: black;
+    color: white;
+    margin: 20px;
+    border-radius: 10px;
+    
+}
+
+.chart-container h1 {
+    text-align: center;
+    margin-bottom: 20px;
+}

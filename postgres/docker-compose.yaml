@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  pg_db:
+    image: postgres:13
+    container_name: bitcoin-pg
+    volumes:
+      - ./init:/docker-entrypoint-initdb.d
+      - ./pg_data:/var/lib/postgresql/data
+    ports:
+      - 5433:5432
+    environment:
+      POSTGRES_DB: crypto
+      POSTGRES_USER: priyanka
+      POSTGRES_PASSWORD: priyanka9167
+
