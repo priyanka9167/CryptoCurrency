@@ -1,166 +1,84 @@
-use crate::models::{Block, BlockDataFromDB, BlockchaninTransaction, TransactionDataFromDB};
+use crate::models::{BlockInfo};
 
-use super::models::BitcoinData;
 
-use anyhow::{Ok, Error as AnyhowError};
+use anyhow::{Ok, Result,Error as AnyhowError};
 use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
 use reqwest::Error;
 use sqlx::{PgPool, Row};
 
-pub async fn insert_bitcoin_data(pool: &PgPool, bitcoin_data: BitcoinData) -> anyhow::Result<()> {
+pub async fn insert_block_info(pool: &PgPool, block_info:  Vec<BlockInfo>) -> Result<()> {
+
+    for block in &block_info { 
     let query_str = r#"
-        INSERT INTO bitcoin_data ( id, name, bitcoin_height, timestamp) 
-        VALUES ( $1, $2, $3, $4 )
-        ON CONFLICT(id) 
-        DO UPDATE SET
-        bitcoin_height = $3,
-        timestamp = $4
+        INSERT INTO blocks (block_hash, block_height, total_transaction, time, transaction_in_usd)
+        VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (block_hash) DO UPDATE
+        SET block_height = EXCLUDED.block_height,
+            total_transaction = EXCLUDED.total_transaction,
+            time = EXCLUDED.time,
+            transaction_in_usd = EXCLUDED.transaction_in_usd
     "#;
 
+    println!("{}", &block.block_hash);
+
     let res = sqlx::query(query_str)
-        .bind(1)
-        .bind(bitcoin_data.name)
-        .bind(bitcoin_data.bitcoin_height)
-        .bind(bitcoin_data.timestamp)
-        // .bind(12345)
-        .execute(pool)
+        .bind(&block.block_hash)
+        .bind(block.block_height)
+        .bind(block.total_transaction as i64)
+        .bind(block.time)
+        .bind(block.transaction_in_usd)
+        .fetch_optional(pool)
         .await?;
+
+        if let Some(row) = res {
+            let inserted_id: i32 = row.get("id");
+            println!("Inserted or updated row ID: {:?}", inserted_id);
+        } else {
+            println!("No row inserted or updated for block hash: {}", block.block_hash);
+        }
+    }
+    
+
     Ok(())
 }
 
-pub async fn get_data_by_timestamp(pool: &PgPool) -> anyhow::Result<Vec<BlockDataFromDB>, AnyhowError> {
-    let start_time = Utc::now() - chrono::Duration::minutes(5);
-    
+
+
+
+pub async fn get_data_by_timestamp(pool: &PgPool) -> anyhow::Result<Vec<BlockInfo>, AnyhowError> {
+    let start_time = Utc::now() - chrono::Duration::minutes(30);
+
     let query_str = r#"
-            SELECT b.blockchain, b.block_number, b.total_transactions, b.gas_used, b.miner, b.block_time, b.difficulty,
-                   t.transaction_hash, t.transaction_time, t.from_address, t.to_address, t.value, t.gas, t.gas_price
+            SELECT b.block_hash, b.block_height, b.total_transaction, b.time, b.transaction_in_usd
             FROM blocks b
-            JOIN transactions t ON b.id = t.block_id
-            WHERE b.block_time >= $1
+            ORDER BY time DESC
+            LIMIT 10
         "#;
+
     let rows = sqlx::query(query_str).bind(start_time).fetch_all(pool).await?;
 
     let mut block_data = vec![];
-    let mut current_block: Option<BlockDataFromDB> = None;
-    
-    for row in rows{
-        let blockchain = row.get("blockchain");
-        let block_number:i64 = row.get("block_number");
-        let total_transaction: i64 = row.get("total_transactions");
-        let gas_used: String = row.get("gas_used");
-        let miner: String = row.get("miner");
-        let block_time: NaiveDateTime = row.try_get("block_time")?;
-        let time: DateTime<Utc> = Utc.from_utc_datetime(&block_time); 
-        let difficulty: String = row.get("difficulty");
 
-        if current_block.is_none() || current_block.as_ref().unwrap().block_number != block_number{
+    for row in rows {
+        let block_hash: String = row.get("block_hash");
+        let block_height: i64 = row.get("block_height");
+        let total_transaction: i32 = row.get("total_transaction"); // Fetch as i32
+        let total_transaction: u32 = total_transaction as u32; 
+        // let time: NaiveDateTime = row.try_get("time")?;
+        let block_time: DateTime<Utc> = row.try_get("time")?;
+        let transaction_in_usd = row.get("transaction_in_usd");
+        
+       
+       
 
-            if let Some(block) = current_block{
-                block_data.push(block)
-            }
-
-            current_block = Some(BlockDataFromDB {
-                blockchain,
-                block_number,
-                total_transaction,
-                gas_used,
-                miner,
-                time,
-                difficulty,
-                transactions: vec![],
-            });
-        }
-
-        if let Some(ref mut block) = current_block{
-            block.transactions.push(TransactionDataFromDB{
-                transaction_hash: row.get("transaction_hash"),
-                time: Utc.from_utc_datetime(&row.try_get::<NaiveDateTime, _>("transaction_time")?), // Convert transaction_time directly
-                from_address: row.get("from_address"),
-                to_address: row.get("to_address"),
-                value: row.get("value"),
-                gas: row.get("gas"),
-                gas_price: row.get("gas_price"),
-            })
-        }
-    }
-
-    if let Some(block) = current_block{
-        block_data.push(block)
+        block_data.push(BlockInfo {
+            block_hash,
+            block_height,
+            total_transaction,
+            time: block_time,
+            transaction_in_usd
+        });
     }
 
     Ok(block_data)
-}
-
-pub async fn insert_blocks(pool: &PgPool, blocks: Vec<Block>) -> anyhow::Result<()> {
-    // let query_str = r#"
-    //     INSERT INTO blocks ( blockchain, block_number, total_transactions, gas_used, miner, block_time, difficulty)
-    //     VALUES ( $1, $2, $3, $4, $5, $6, $7 )
-    // "#;
-
-    for block in &blocks {
-        let query_str = r#"
-        INSERT INTO blocks (blockchain, block_number, total_transactions, gas_used, miner, block_time, difficulty)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
-        ON CONFLICT(blockchain, block_number)
-        DO UPDATE SET
-            total_transactions = EXCLUDED.total_transactions,
-            gas_used = EXCLUDED.gas_used,
-            miner = EXCLUDED.miner,
-            block_time = EXCLUDED.block_time,
-            difficulty = EXCLUDED.difficulty
-        RETURNING id
-    "#;
-
-        let res = sqlx::query(query_str)
-            .bind(block.blockchain.to_owned())
-            .bind(block.block_number)
-            .bind(block.total_transaction)
-            .bind(block.gas_used.to_owned())
-            .bind(block.miner.to_owned())
-            .bind(block.time)
-            .bind(block.difficulty.to_owned())
-            // .bind(12345)
-            .fetch_one(pool)
-            .await?;
-        let inserted_id: i32 = res.get("id");
-        println!("Inserted or updated row ID: {:?}", inserted_id);
-
-        match block.transactions.to_owned() {
-            Some(txns) => {
-                let _ = insert_transaction(pool, inserted_id, txns).await;
-            }
-            None => (),
-        }
-    }
-
-    Ok(())
-}
-
-pub async fn insert_transaction(
-    pool: &PgPool,
-    block_id: i32,
-    transactions: Vec<BlockchaninTransaction>,
-) -> anyhow::Result<()> {
-    for transaction in &transactions {
-        sqlx::query(
-            r#"
-            INSERT INTO transactions (block_id, transaction_hash, transaction_time, from_address, to_address, value, gas, gas_price)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            "#
-        )
-        .bind(block_id)
-        .bind(transaction.transaction_hash.to_owned())
-        .bind(transaction.time)
-        .bind(transaction.from_address.to_owned())
-        .bind(transaction.to_address.to_owned())
-        .bind(transaction.value.to_owned())
-        .bind(transaction.gas.to_owned())
-        .bind(transaction.gas_price.to_owned())
-        .execute(pool)
-        .await?;
-    }
-
-    println!("Inserted {} transactions.", transactions.len());
-
-    Ok(())
 }

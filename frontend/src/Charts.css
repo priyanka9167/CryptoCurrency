@@ -11,3 +11,39 @@
     text-align: center;
     margin-bottom: 20px;
 }
+
+.block-table-container {
+    margin: 20px;
+}
+
+.block-table {
+    width: 100%;
+    border-collapse: collapse;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    border: 1px solid #ddd;
+    background-color: #ffffff; /* Set table background to white */
+    color: #333; /* Set text color to black */
+}
+
+.block-table th, .block-table td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+}
+
+.block-table th {
+    background-color: #f2f2f2;
+    color: #333;
+}
+
+.block-table tbody tr:nth-child(even) {
+    background-color: #ffffff; /* Ensure even rows are white */
+}
+
+.block-table tbody tr:hover {
+    background-color: #e9e9e9;
+}
+
+.block-table td {
+    white-space: nowrap; /* Prevent wrapping text */
+}

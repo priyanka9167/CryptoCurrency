@@ -46,28 +46,66 @@ pub struct BitcoinDataFromDB {
     pub timestamp: i64,
 }
 
-#[derive(Debug, Serialize,Deserialize)]
-pub struct EthPrice {
-    pub ethereum: EthUsd,
+
+#[derive(Debug, Deserialize)]
+pub struct Transaction {
+    pub hash: String,
+    pub n_tx: u32,
+    pub tx: Vec<TransactionDetails>,
+    // Add more fields as needed
+}
+
+#[derive(Debug, Deserialize)]
+pub struct TransactionDetails {
+    pub out: Vec<TransactionOutput>,
+    // Add more fields as needed
+}
+
+#[derive(Debug, Deserialize)]
+pub struct TransactionOutput {
+    pub value: f64,
+    // Add more fields as needed
 }
 
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct EthUsd {
-    pub usd: f64,
-
+#[derive(Debug, Deserialize)]
+pub struct Ticker {
+    #[serde(rename = "15m")]
+   pub fifteen_min: f64,
+    pub last: f64,
+   pub  buy: f64,
+    pub sell: f64,
+   pub  symbol: String,
 }
+
+
+
+
+#[derive(Debug, Deserialize)]
+pub struct Block {
+   pub hash: String,
+    pub height: i64,
+    pub time: u64,
+    pub block_index: u64
+    // Add more fields as needed
+}
+
+#[derive(Debug, Deserialize)]
+pub struct BlockchainResponse {
+    pub blocks: Vec<Block>,
+}
+
+
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Block{
-    pub blockchain: String,
-    pub block_number: i64,
-    pub total_transaction: i64,
-    pub gas_used: String,
-    pub miner: String,
+pub struct BlockInfo {
+    
+    pub block_hash: String,
+    pub block_height: i64,
+    pub total_transaction: u32,
     pub time: DateTime<Utc>,
-    pub difficulty: String,
-    pub transactions: Option<Vec<BlockchaninTransaction>>,
+    pub transaction_in_usd: f64,
+    
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

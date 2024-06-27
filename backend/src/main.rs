@@ -3,7 +3,7 @@
 use std::time::Duration;
 
 use axum::{ http::HeaderName, routing::get,  Router};
-use handlers::get_bitcoin;
+// use handlers::get_bitcoin;
 use models::AppState;
 // use reqwest::Error;
 use dotenv::dotenv;
@@ -41,7 +41,6 @@ async fn main() {
 
         let app = Router::new()
         .route("/get_bitcoin", get(handlers::get_bitcoin))
-        .route("/get_rate", get(handlers::fetch_rate))
         .layer(cors)
         .with_state(shared_state.clone());
 
@@ -55,7 +54,7 @@ async fn main() {
 
     // Spawn a new task to fetch Bitcoin data
     tokio::spawn(async move {
-        let mut interval = interval(Duration::from_secs(10));
+        let mut interval = interval(Duration::from_secs(600));
         loop {
             interval.tick().await;
             start_fetching(&pool).await;
@@ -66,15 +65,12 @@ async fn main() {
     axum::serve(listener, app).await.unwrap();
 }
 
-async fn start_fetching(pool: &PgPool){
-    println!("Started fetching!!!");
-    let mut interval = interval(Duration::from_secs(10));
-    loop{
-        interval.tick().await;
-        // let latest_bitcoin_data = fetch_btc_data().await;
-        let latest_blocks = blockchain_apis::fetch_btc_data().await.unwrap();
+async fn start_fetching(pool: &PgPool) -> Result<(), Box<dyn std::error::Error>> {
+    println!("Started fetching Bitcoin data!!!");
 
-        repository::insert_blocks(&pool, latest_blocks).await.unwrap();
-    }
+    let latest_blocks = blockchain_apis::fetch_btc_data().await?;
+    repository::insert_block_info(&pool, latest_blocks).await?;
+
+    Ok(())
 }
 

@@ -6,50 +6,22 @@ import './Charts.css';
 const Charts: React.FC = () => {
 
     const [data, setData] = useState<Array<BlockData>>([]);
-    const [rate, setRate] = useState<number>(3000);
 
-    const fetchRate = async () => {
-        try {
-            let response = await fetch("http://localhost:3000/get_rate");
-            let rate = await response.json();
-            setRate(rate.ethereum.usd || 3000); // Set default rate if rateData.ethereum.usd is undefined
-        }
-        catch (e) {
-            setRate(3000)
-            // console.log(e)
-        }
-    }
+
 
     const fetchApi = async () => {
         try {
             let response = await fetch("http://localhost:3000/get_bitcoin");
             let block_data = await response.json();
             const parseData = block_data.map((block: BlockData) => {
-                // Initialize transactionValues array
-                let transactionValues: number[] = [];
 
-                // Check if block.transactions is defined and not empty
-                if (block.transactions && block.transactions.length > 0) {
-                    // Map over transactions to extract values
-                    transactionValues = block.transactions.map((data) => parseFloat(data.value));
-                }
 
-                // Calculate total value of transactions
-                const total = BigInt(transactionValues.reduce((partialSum: number, value: number) => partialSum + value, 0));
-                const weiPerEther = BigInt('1000000000000000000');
-                let usdValue: number | undefined;
-
-                if (rate !== undefined) {
-                    const ethValue = total / weiPerEther;
-                    usdValue = Number(ethValue) * rate;
-                }
                 return {
-                    block_number: Number(block.block_number),
-                    total_transaction: typeof block.total_transaction === 'string' ? parseInt(block.total_transaction, 10) : block.total_transaction,
-                    gas_used: typeof block.gas_used === 'string' ? parseFloat(block.gas_used) : block.gas_used,
-                    transactions: transactionValues,
-                    total: total,
-                    usdValue: usdValue
+                    block_hash: block.block_hash,
+                    block_height: block.block_height,
+                    total_transaction: block.total_transaction,
+                    time: block.time,
+                    transaction_in_usd: block.transaction_in_usd
                 }
 
             });
@@ -72,11 +44,11 @@ const Charts: React.FC = () => {
     };
 
     useEffect(() => {
-        fetchRate();
+
         fetchApi();
-       
+
         const interval = setInterval(() => {
-            fetchRate();
+
             fetchApi();
         }, 20000);
 
@@ -86,12 +58,12 @@ const Charts: React.FC = () => {
 
     useEffect(() => {
         console.log(data); // Debugging: Log the data
-        console.log(rate);
+
     }, [data]);
 
     return (
         <div className="chart-container">
-            <h1>Ethereum Charts</h1>
+            <h1>Bitcoin Charts</h1>
             {data.length > 0 ? (
                 <>
                     <div className="chart">
@@ -102,7 +74,7 @@ const Charts: React.FC = () => {
                                 margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
                             >
                                 <CartesianGrid strokeDasharray="3 3" />
-                                <XAxis dataKey="block_number" />
+                                <XAxis dataKey="block_height" />
                                 <YAxis tickFormatter={formatYAxis} />
                                 <Tooltip />
                                 <Legend />
@@ -118,11 +90,11 @@ const Charts: React.FC = () => {
                                 margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
                             >
                                 <CartesianGrid strokeDasharray="3 3" />
-                                <XAxis dataKey="block_number" />
+                                <XAxis dataKey="block_height" />
                                 <YAxis tickFormatter={formatYAxis} />
                                 <Tooltip />
                                 <Legend />
-                                <Line type="monotone" dataKey="usdValue" stroke="#82ca9d" activeDot={{ r: 8 }} />
+                                <Line type="monotone" dataKey="transaction_in_usd" stroke="#82ca9d" activeDot={{ r: 8 }} />
                             </LineChart>
                         </ResponsiveContainer>
                     </div>
@@ -130,6 +102,28 @@ const Charts: React.FC = () => {
             ) : (
                 <p>Loading...</p>
             )}
+
+            <div className="block-table-container">
+                <h2>Block Data</h2>
+                <table className="block-table">
+                    <thead>
+                        <tr>
+                            <th>Block Hash</th>
+                            <th>Block Height</th>
+                            
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {data.map((block, index) => (
+                            <tr key={index}>
+                                <td>{block.block_hash}</td>
+                                <td>{block.block_height}</td>
+                                
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
         </div>
     )
 }

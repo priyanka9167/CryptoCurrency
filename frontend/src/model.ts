@@ -1,16 +1,12 @@
 export interface BlockData  {
-    block_number: number,
-    gas_used: number,
-    total_transaction: number,
-    transactions: Transaction[],
-    total? : number
-    usd?: number
+    block_hash: string;
+    block_height: number; // Assuming block_height corresponds to block_number
+    total_transaction: number;
+    time: string; // Assuming you handle DateTime conversion on the frontend
+    transaction_in_usd: number;
 
 
 }
 
-export interface Transaction{
-    value: string;
-}
 
 
